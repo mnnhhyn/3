@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>계획표 & 일정 달력 v1.09</title>
+
+  <!-- ===== PWA 설정 ===== -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#3498db">
+  <meta name="background-color" content="#f5f7fb">
+
+  <!-- 아이콘 -->
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+
+  <!-- iOS 홈 화면 추가 대응 -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="계획표">
+
+  <!-- Android/Chrome 대응 -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <!-- ===================== -->
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', -apple-system, sans-serif; }
+    html, body { height: 100%; }
+    body {
+      padding: 20px;
+      padding-top: calc(20px + env(safe-area-inset-top, 0px));
+      padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+      background: #f5f7fb;
+      color: #333;
+      position: relative;
+      min-height: 100vh;
+    }
+    .calendar-container { max-width: 850px; margin: 0 auto; background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); position: relative; }
+    
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: relative; }
+    .header h2 { font-size: 1.5rem; color: #2c3e50; cursor: pointer; padding: 4px 12px; border-radius: 6px; transition: 0.2s; user-select: none; }
+    .header h2:hover { background: #e2e8f0; color: #1a202c; }
+    .header button { padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+    .header button:hover { background: #2980b9; }
+
+    /* 연/월 선택 드롭다운 팝업 */
+    .ym-picker-popover {
+      display: none;
+      position: absolute;
+      top: 45px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+      z-index: 50;
+      width: 320px;
+      padding: 16px;
+    }
+    .ym-picker-popover.active { display: flex; gap: 12px; }
+    .ym-column { flex: 1; display: flex; flex-direction: column; }
+    .ym-column-title { font-size: 0.85rem; font-weight: bold; color: #64748b; margin-bottom: 8px; text-align: center; }
+    
+    .ym-list-scroll { max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
+    
+    .ym-grid-month { 
+      display: grid; 
+      grid-template-columns: repeat(2, 1fr); 
+      gap: 6px; 
+      max-height: 200px; 
+      overflow-y: auto; 
+      padding-right: 2px;
+    }
+
+    .ym-btn {
+      width: 100%;
+      height: 32px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #334155;
+      text-align: center;
+      transition: 0.15s;
+    }
+    .ym-btn:hover { background: #edf2f7; border-color: #cbd5e1; }
+    .ym-btn.selected { background: #3498db; color: #ffffff; border-color: #3498db; }
+
+    .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; text-align: center; }
+    .day-header { font-weight: bold; padding: 10px 0; color: #7f8c8d; }
+    .day-header.sun { color: #e74c3c; }
+    .day-header.sat { color: #2980b9; }
+    
+    .day { 
+      height: 110px; 
+      border: 1px solid #e2e8f0; 
+      border-radius: 8px; 
+      padding: 6px; 
+      cursor: pointer; 
+      text-align: left; 
+      background: #fff; 
+      transition: 0.2s; 
+      position: relative; 
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .day:hover { background: #edf2f7; }
+    .day.today { border: 2px solid #3498db; background-color: #f0f8ff; }
+    .day.today .day-number { font-weight: 800; }
+
+    .day-number { font-weight: bold; margin-bottom: 2px; font-size: 0.9rem; color: #2c3e50; flex-shrink: 0; }
+    .day.sun .day-number, .day.holiday .day-number { color: #e74c3c; }
+    .day.sat .day-number { color: #2980b9; }
+
+    .badge-holiday {
+      display: block;
+      font-size: 0.7rem;
+      padding: 1px 4px;
+      border-radius: 3px;
+      margin-bottom: 2px;
+      background-color: #fde8e8;
+      color: #e74c3c;
+      font-weight: bold;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .plan-dot {
+      position: absolute;
+      bottom: 6px;
+      right: 6px;
+      width: 8px;
+      height: 8px;
+      background-color: #f1c40f;
+      border-radius: 50%;
+      box-shadow: 0 0 4px rgba(241, 196, 15, 0.8);
+      z-index: 2;
+    }
+
+    .badge-event { 
+      display: block; 
+      font-size: 0.73rem; 
+      padding: 2px 5px; 
+      border-radius: 4px; 
+      margin-top: 2px; 
+      text-overflow: ellipsis; 
+      overflow: hidden; 
+      white-space: nowrap; 
+      color: white;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+
+    .badge-more {
+      display: block;
+      font-size: 0.7rem;
+      padding: 1px 4px;
+      margin-top: 2px;
+      color: #64748b;
+      font-weight: bold;
+      background: #f1f5f9;
+      border-radius: 3px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    /* 모달 레이아웃 */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); justify-content: center; align-items: center; z-index: 100; }
+    .modal { background: white; width: 92%; max-width: 580px; max-height: 92vh; border-radius: 12px; padding: 24px; display: flex; flex-direction: column; box-shadow: 0 5px 20px rgba(0,0,0,0.2); }
+    .modal-header { font-size: 1.25rem; font-weight: bold; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+    .close-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #999; }
+    .close-btn:hover { color: #333; }
+    
+    .mode-select { display: flex; gap: 10px; margin-bottom: 15px; }
+    .mode-btn { flex: 1; padding: 10px; border: 1px solid #cbd5e1; background: #f8fafc; cursor: pointer; border-radius: 6px; font-weight: bold; color: #64748b; }
+    .mode-btn.active { background: #3498db; color: white; border-color: #3498db; }
+    .modal-body { overflow-y: auto; flex: 1; padding-right: 5px; }
+
+    /* 폼 스타일 */
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-size: 0.85rem; font-weight: bold; color: #475569; margin-bottom: 4px; }
+    .form-control { width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; }
+    .time-range { display: flex; gap: 8px; align-items: center; }
+    .time-range input { flex: 1; }
+
+    /* 색상 선택기 */
+    .color-options { display: flex; gap: 8px; margin-top: 4px; }
+    .color-btn { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+    .color-btn.selected { border-color: #333; transform: scale(1.1); }
+
+    /* 버튼 그룹 */
+    .btn-group { display: flex; gap: 8px; margin-top: 10px; }
+    .submit-btn { flex: 1; padding: 10px; background: #2ecc71; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.9rem; transition: 0.2s; }
+    .submit-btn:hover { background: #27ae60; }
+    .save-plan-btn { background: #3498db; }
+    .save-plan-btn:hover { background: #2980b9; }
+    .save-close-btn { background: #9b59b6; }
+    .save-close-btn:hover { background: #8e44ad; }
+    .cancel-btn { background: #94a3b8; width: 100%; margin-top: 5px; }
+    .cancel-btn:hover { background: #64748b; }
+
+    /* 원형 계획표 SVG 차트 영역 */
+    .chart-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 15px 0;
+      background: #fafafa;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid #edf2f7;
+    }
+    .clock-svg { width: 100%; max-width: 450px; height: auto; }
+
+    /* 리스트 스타일 */
+    .item-list { margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+    .list-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #f8fafc; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid #3498db; }
+    .list-item-content { flex: 1; }
+    .list-item-title { font-weight: bold; font-size: 0.95rem; color: #1e293b; }
+    .list-item-sub { font-size: 0.8rem; color: #64748b; margin-top: 2px; }
+    .item-actions { display: flex; gap: 8px; align-items: center; }
+    .edit-btn { color: #3498db; cursor: pointer; font-weight: bold; font-size: 0.85rem; padding: 2px 6px; border-radius: 4px; background: #ebf8ff; }
+    .edit-btn:hover { background: #bee3f8; }
+    .delete-btn { color: #ef4444; cursor: pointer; font-weight: bold; font-size: 1.1rem; padding-left: 4px; }
+    .delete-btn:hover { color: #dc2626; }
+
+    .version-tag {
+      position: absolute;
+      bottom: 12px;
+      right: 15px;
+      font-size: 0.8rem;
+      color: #a0aec0;
+      font-weight: 600;
+      user-select: none;
+    }
+
+    /* 설치 안내 배너 */
+    .install-banner {
+      display: none;
+      max-width: 850px;
+      margin: 0 auto 14px auto;
+      background: #eaf4fd;
+      border: 1px solid #bfe0fb;
+      color: #1f5f8b;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .install-banner.show { display: flex; }
+    .install-banner button {
+      background: #3498db;
+      color: #fff;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .install-banner button:hover { background: #2980b9; }
+  </style>
+</head>
+<body>
+
+  <!-- 홈 화면 설치 유도 배너 (Android/Chrome) -->
+  <div class="install-banner" id="installBanner">
+    <span>📱 이 앱을 홈 화면에 추가하고 앱처럼 사용해보세요.</span>
+    <button id="installBtn">설치하기</button>
+  </div>
+
+  <div class="calendar-container">
+    <div class="header">
+      <button onclick="changeMonth(-1)">&lt; 이전</button>
+      <h2 id="monthYear" onclick="toggleYmPicker(event)" title="클릭하여 년/월 이동"></h2>
+      <button onclick="changeMonth(1)">다음 &gt;</button>
+
+      <!-- 연/월 선택 팝업 -->
+      <div class="ym-picker-popover" id="ymPicker">
+        <div class="ym-column">
+          <div class="ym-column-title">년도 선택</div>
+          <div class="ym-list-scroll" id="ymYearList"></div>
+        </div>
+        <div class="ym-column">
+          <div class="ym-column-title">월 선택</div>
+          <div class="ym-grid-month" id="ymMonthGrid"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid" id="calendarGrid"></div>
+    <div class="version-tag">v1.09</div>
+  </div>
+
+  <!-- 모달 구조 -->
+  <div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
+    <div class="modal">
+      <div class="modal-header">
+        <span id="modalTitle">날짜 선택</span>
+        <button class="close-btn" onclick="closeModal()">&times;</button>
+      </div>
+
+      <div class="mode-select">
+        <button class="mode-btn active" id="btnModeEvent" onclick="switchMode('event')">일정 관리</button>
+        <button class="mode-btn" id="btnModePlan" onclick="switchMode('plan')">24시간 계획표</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- 일정 관리 섹션 -->
+        <div id="eventSection">
+          <div class="form-group">
+            <label>일정 제목</label>
+            <input type="text" id="eventTitle" class="form-control" placeholder="일정 제목을 입력하세요">
+          </div>
+          <div class="form-group">
+            <label>시간</label>
+            <div class="time-range">
+              <input type="time" id="eventStartTime" class="form-control">
+              <span>~</span>
+              <input type="time" id="eventEndTime" class="form-control">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>장소 / 위치</label>
+            <input type="text" id="eventLocation" class="form-control" placeholder="장소를 입력하세요">
+          </div>
+          <div class="form-group">
+            <label>메모</label>
+            <input type="text" id="eventMemo" class="form-control" placeholder="추가 메모">
+          </div>
+          <div class="form-group">
+            <label>색상 선택</label>
+            <div class="color-options" id="eventColorPicker">
+              <div class="color-btn selected" style="background: #3498db;" data-color="#3498db"></div>
+              <div class="color-btn" style="background: #e74c3c;" data-color="#e74c3c"></div>
+              <div class="color-btn" style="background: #2ecc71;" data-color="#2ecc71"></div>
+              <div class="color-btn" style="background: #f39c12;" data-color="#f39c12"></div>
+              <div class="color-btn" style="background: #9b59b6;" data-color="#9b59b6"></div>
+              <div class="color-btn" style="background: #34495e;" data-color="#34495e"></div>
+            </div>
+          </div>
+          <button class="submit-btn" onclick="addEvent()">일정 추가하기</button>
+
+          <div class="item-list" id="eventList"></div>
+        </div>
+
+        <!-- 24시간 계획표 섹션 -->
+        <div id="planSection" style="display: none;">
+          <div class="form-group">
+            <label>계획 내용</label>
+            <input type="text" id="planTitle" class="form-control" placeholder="할 일 / 계획 내용 입력">
+          </div>
+          <div class="form-group">
+            <label>시간 설정 (분 단위 지정)</label>
+            <div class="time-range">
+              <input type="time" id="planStartTime" class="form-control" value="09:00">
+              <span>~</span>
+              <input type="time" id="planEndTime" class="form-control" value="10:00">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>계획 색상 선택</label>
+            <div class="color-options" id="planColorPicker">
+              <div class="color-btn selected" style="background: #9b59b6;" data-color="#9b59b6"></div>
+              <div class="color-btn" style="background: #3498db;" data-color="#3498db"></div>
+              <div class="color-btn" style="background: #e74c3c;" data-color="#e74c3c"></div>
+              <div class="color-btn" style="background: #2ecc71;" data-color="#2ecc71"></div>
+              <div class="color-btn" style="background: #f39c12;" data-color="#f39c12"></div>
+              <div class="color-btn" style="background: #16a085;" data-color="#16a085"></div>
+              <div class="color-btn" style="background: #e67e22;" data-color="#e67e22"></div>
+            </div>
+          </div>
+
+          <div class="btn-group">
+            <button class="submit-btn save-plan-btn" id="btnPlanSave" onclick="savePlan(false)">계획 저장</button>
+            <button class="submit-btn save-close-btn" id="btnPlanSaveClose" onclick="savePlan(true)">계획 저장 및 닫기</button>
+          </div>
+          <button class="submit-btn cancel-btn" id="btnPlanCancel" onclick="resetPlanForm()" style="display: none;">수정 취소</button>
+
+          <div class="chart-container">
+            <svg class="clock-svg" id="clockSvg" viewBox="0 0 320 200"></svg>
+          </div>
+
+          <div class="item-list" id="planList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentDate = new Date();
+    let selectedDateStr = "";
+    let selectedEventColor = "#3498db";
+    let selectedPlanColor = "#9b59b6";
+    let editingPlanIndex = -1;
+    let storageData = JSON.parse(localStorage.getItem("calendarData")) || {};
+
+    const fixedHolidays = {
+      "01-01": "신정", "03-01": "삼일절", "05-05": "어린이날", "06-06": "현충일",
+      "07-17": "제헌절", "08-15": "광복절", "10-03": "개천절", "10-09": "한글날", "12-25": "크리스마스"
+    };
+
+    // 2024년 ~ 2030년 설날/추석 명절 연휴 및 대체공휴일
+    const dynamicHolidays = {
+      // 2024년
+      "2024-02-09": "설날 연휴", "2024-02-10": "설날", "2024-02-11": "설날 연휴", "2024-02-12": "대체공휴일",
+      "2024-09-16": "추석 연휴", "2024-09-17": "추석", "2024-09-18": "추석 연휴",
+
+      // 2025년
+      "2025-01-28": "설날 연휴", "2025-01-29": "설날", "2025-01-30": "설날 연휴",
+      "2025-05-05": "부처님오신날", "2025-05-06": "대체공휴일",
+      "2025-10-05": "추석 연휴", "2025-10-06": "추석", "2025-10-07": "추석 연휴", "2025-10-08": "대체공휴일",
+
+      // 2026년
+      "2026-02-16": "설날 연휴", "2026-02-17": "설날", "2026-02-18": "설날 연휴",
+      "2026-03-02": "대체공휴일", "2026-05-24": "부처님오신날", "2026-05-25": "대체공휴일",
+      "2026-08-17": "대체공휴일", "2026-09-24": "추석 연휴", "2026-09-25": "추석", "2026-09-26": "추석 연휴",
+      "2026-10-05": "대체공휴일",
+
+      // 2027년
+      "2027-02-06": "설날 연휴", "2027-02-07": "설날", "2027-02-08": "설날 연휴", "2027-02-09": "대체공휴일",
+      "2027-05-13": "부처님오신날", "2027-08-16": "대체공휴일",
+      "2027-09-14": "추석 연휴", "2027-09-15": "추석", "2027-09-16": "추석 연휴",
+
+      // 2028년
+      "2028-01-26": "설날 연휴", "2028-01-27": "설날", "2028-01-28": "설날 연휴",
+      "2028-05-02": "부처님오신날",
+      "2028-10-02": "추석 연휴", "2028-10-03": "추석", "2028-10-04": "추석 연휴", "2028-10-05": "대체공휴일",
+
+      // 2029년
+      "2029-02-12": "설날 연휴", "2029-02-13": "설날", "2029-02-14": "설날 연휴",
+      "2029-05-20": "부처님오신날", "2029-05-21": "대체공휴일",
+      "2029-09-21": "추석 연휴", "2029-09-22": "추석", "2029-09-23": "추석 연휴", "2029-09-24": "대체공휴일",
+
+      // 2030년
+      "2030-02-02": "설날 연휴", "2030-02-03": "설날", "2030-02-04": "설날 연휴", "2030-02-05": "대체공휴일",
+      "2030-05-09": "부처님오신날",
+      "2030-09-11": "추석 연휴", "2030-09-12": "추석", "2030-09-13": "추석 연휴"
+    };
+
+    function getHolidayName(dateStr) {
+      const mmdd = dateStr.slice(5);
+      return fixedHolidays[mmdd] || dynamicHolidays[dateStr] || null;
+    }
+
+    document.querySelectorAll('#eventColorPicker .color-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('#eventColorPicker .color-btn').forEach(b => b.classList.remove('selected'));
+        e.target.classList.add('selected');
+        selectedEventColor = e.target.dataset.color;
+      });
+    });
+
+    document.querySelectorAll('#planColorPicker .color-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('#planColorPicker .color-btn').forEach(b => b.classList.remove('selected'));
+        e.target.classList.add('selected');
+        selectedPlanColor = e.target.dataset.color;
+      });
+    });
+
+    function selectPlanColor(color) {
+      selectedPlanColor = color;
+      document.querySelectorAll('#planColorPicker .color-btn').forEach(b => {
+        if (b.dataset.color === color) b.classList.add('selected');
+        else b.classList.remove('selected');
+      });
+    }
+
+    /* 외부 클릭 시 연/월 드롭다운 닫기 */
+    document.addEventListener('click', (e) => {
+      const popover = document.getElementById('ymPicker');
+      const title = document.getElementById('monthYear');
+      if (popover.classList.contains('active') && !popover.contains(e.target) && e.target !== title) {
+        popover.classList.remove('active');
+      }
+    });
+
+    function toggleYmPicker(e) {
+      e.stopPropagation();
+      const popover = document.getElementById('ymPicker');
+      const isActive = popover.classList.contains('active');
+      
+      if (!isActive) {
+        renderYmPicker();
+        popover.classList.add('active');
+      } else {
+        popover.classList.remove('active');
+      }
+    }
+
+    function renderYmPicker() {
+      const yearListEl = document.getElementById('ymYearList');
+      const monthGridEl = document.getElementById('ymMonthGrid');
+      
+      yearListEl.innerHTML = "";
+      monthGridEl.innerHTML = "";
+
+      const currentY = currentDate.getFullYear();
+      const currentM = currentDate.getMonth() + 1;
+
+      for (let y = 1950; y <= 2050; y++) {
+        const btn = document.createElement('button');
+        btn.className = `ym-btn ${y === currentY ? 'selected' : ''}`;
+        btn.innerText = `${y}년`;
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          currentDate.setFullYear(y);
+          renderCalendar();
+          renderYmPicker();
+        };
+        yearListEl.appendChild(btn);
+      }
+
+      setTimeout(() => {
+        const selectedBtn = yearListEl.querySelector('.selected');
+        if (selectedBtn) selectedBtn.scrollIntoView({ block: 'center' });
+      }, 0);
+
+      for (let m = 1; m <= 12; m++) {
+        const btn = document.createElement('button');
+        btn.className = `ym-btn ${m === currentM ? 'selected' : ''}`;
+        btn.innerText = `${m}월`;
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          currentDate.setMonth(m - 1);
+          renderCalendar();
+          document.getElementById('ymPicker').classList.remove('active');
+        };
+        monthGridEl.appendChild(btn);
+      }
+    }
+
+    function renderCalendar() {
+      const grid = document.getElementById("calendarGrid");
+      grid.innerHTML = "";
+
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+
+      document.getElementById("monthYear").innerText = `${year}년 ${month + 1}월`;
+
+      const daysOfWeek = ["일", "월", "화", "수", "목", "금", "토"];
+      daysOfWeek.forEach((day, index) => {
+        const header = document.createElement("div");
+        header.className = "day-header";
+        if (index === 0) header.classList.add("sun");
+        if (index === 6) header.classList.add("sat");
+        header.innerText = day;
+        grid.appendChild(header);
+      });
+
+      const firstDay = new Date(year, month, 1).getDay();
+      const lastDate = new Date(year, month + 1, 0).getDate();
+
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+      for (let i = 0; i < firstDay; i++) {
+        grid.appendChild(document.createElement("div"));
+      }
+
+      for (let day = 1; day <= lastDate; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dayOfWeek = new Date(year, month, day).getDay();
+        const holidayName = getHolidayName(dateStr);
+
+        const dayEl = document.createElement("div");
+        let classNames = ["day"];
+        
+        if (dateStr === todayStr) classNames.push("today");
+        if (dayOfWeek === 0) classNames.push("sun");
+        if (dayOfWeek === 6) classNames.push("sat");
+        if (holidayName) classNames.push("holiday");
+
+        dayEl.className = classNames.join(" ");
+        dayEl.onclick = () => openModal(dateStr);
+
+        const numEl = document.createElement("div");
+        numEl.className = "day-number";
+        numEl.innerText = day;
+        dayEl.appendChild(numEl);
+
+        if (holidayName) {
+          const holidayBadge = document.createElement("span");
+          holidayBadge.className = "badge-holiday";
+          holidayBadge.innerText = holidayName;
+          dayEl.appendChild(holidayBadge);
+        }
+
+        if (storageData[dateStr]) {
+          const events = storageData[dateStr].events || [];
+          const plans = storageData[dateStr].plans || [];
+
+          const maxVisible = holidayName ? 1 : 2;
+
+          events.slice(0, maxVisible).forEach(ev => {
+            const badge = document.createElement("span");
+            badge.className = "badge-event";
+            badge.style.backgroundColor = ev.color || "#3498db";
+            badge.innerText = ev.title;
+            dayEl.appendChild(badge);
+          });
+
+          if (events.length > maxVisible) {
+            const moreBadge = document.createElement("span");
+            moreBadge.className = "badge-more";
+            moreBadge.innerText = `... (+${events.length - maxVisible}개)`;
+            dayEl.appendChild(moreBadge);
+          }
+
+          if (plans.length > 0) {
+            const dot = document.createElement("div");
+            dot.className = "plan-dot";
+            dayEl.appendChild(dot);
+          }
+        }
+
+        grid.appendChild(dayEl);
+      }
+    }
+
+    function changeMonth(delta) {
+      currentDate.setDate(1);
+      currentDate.setMonth(currentDate.getMonth() + delta);
+      renderCalendar();
+    }
+
+    function openModal(dateStr) {
+      selectedDateStr = dateStr;
+      document.getElementById("modalTitle").innerText = `${dateStr} 일정 / 계획`;
+      document.getElementById("modalOverlay").style.display = "flex";
+      
+      if (!storageData[selectedDateStr]) {
+        storageData[selectedDateStr] = { events: [], plans: [] };
+      }
+
+      resetPlanForm();
+      switchMode('event');
+    }
+
+    function closeModal() {
+      document.getElementById("modalOverlay").style.display = "none";
+      renderCalendar();
+    }
+
+    function handleOverlayClick(e) {
+      if (e.target.id === "modalOverlay") closeModal();
+    }
+
+    function switchMode(mode) {
+      const btnEvent = document.getElementById("btnModeEvent");
+      const btnPlan = document.getElementById("btnModePlan");
+      const eventSec = document.getElementById("eventSection");
+      const planSec = document.getElementById("planSection");
+
+      if (mode === 'event') {
+        btnEvent.classList.add("active");
+        btnPlan.classList.remove("active");
+        eventSec.style.display = "block";
+        planSec.style.display = "none";
+        renderEvents();
+      } else {
+        btnPlan.classList.add("active");
+        btnEvent.classList.remove("active");
+        planSec.style.display = "block";
+        eventSec.style.display = "none";
+        renderPlans();
+      }
+    }
+
+    function addEvent() {
+      const title = document.getElementById("eventTitle").value.trim();
+      if (!title) return alert("일정 제목을 입력하세요.");
+
+      const newEvent = {
+        title: title,
+        startTime: document.getElementById("eventStartTime").value,
+        endTime: document.getElementById("eventEndTime").value,
+        location: document.getElementById("eventLocation").value.trim(),
+        memo: document.getElementById("eventMemo").value.trim(),
+        color: selectedEventColor
+      };
+
+      storageData[selectedDateStr].events.push(newEvent);
+      saveData();
+
+      document.getElementById("eventTitle").value = "";
+      document.getElementById("eventStartTime").value = "";
+      document.getElementById("eventEndTime").value = "";
+      document.getElementById("eventLocation").value = "";
+      document.getElementById("eventMemo").value = "";
+
+      renderEvents();
+    }
+
+    function renderEvents() {
+      const listEl = document.getElementById("eventList");
+      listEl.innerHTML = "";
+      const events = storageData[selectedDateStr]?.events || [];
+
+      events.forEach((ev, idx) => {
+        const item = document.createElement("div");
+        item.className = "list-item";
+        item.style.borderLeftColor = ev.color;
+
+        let timeStr = ev.startTime ? `${ev.startTime} ${ev.endTime ? '~ ' + ev.endTime : ''}` : '시간 미지정';
+        let subDetails = [timeStr, ev.location, ev.memo].filter(Boolean).join(" | ");
+
+        item.innerHTML = `
+          <div class="list-item-content">
+            <div class="list-item-title">${ev.title}</div>
+            <div class="list-item-sub">${subDetails}</div>
+          </div>
+          <span class="delete-btn" onclick="deleteEvent(${idx})">&times;</span>
+        `;
+        listEl.appendChild(item);
+      });
+    }
+
+    function deleteEvent(index) {
+      storageData[selectedDateStr].events.splice(index, 1);
+      saveData();
+      renderEvents();
+    }
+
+    function savePlan(shouldClose = false) {
+      const title = document.getElementById("planTitle").value.trim();
+      const startTime = document.getElementById("planStartTime").value;
+      const endTime = document.getElementById("planEndTime").value;
+
+      if (!title) return alert("계획 내용을 입력하세요.");
+
+      const planData = { 
+        title, 
+        startTime, 
+        endTime, 
+        color: selectedPlanColor || "#9b59b6" 
+      };
+
+      if (!storageData[selectedDateStr].plans) {
+        storageData[selectedDateStr].plans = [];
+      }
+
+      if (editingPlanIndex >= 0) {
+        storageData[selectedDateStr].plans[editingPlanIndex] = planData;
+      } else {
+        storageData[selectedDateStr].plans.push(planData);
+      }
+
+      storageData[selectedDateStr].plans.sort((a, b) => a.startTime.localeCompare(b.startTime));
+      saveData();
+
+      resetPlanForm();
+      renderPlans();
+
+      if (shouldClose) {
+        closeModal();
+      }
+    }
+
+    function startEditPlan(index) {
+      const plan = storageData[selectedDateStr]?.plans[index];
+      if (!plan) return;
+
+      editingPlanIndex = index;
+      document.getElementById("planTitle").value = plan.title;
+      document.getElementById("planStartTime").value = plan.startTime;
+      document.getElementById("planEndTime").value = plan.endTime;
+      selectPlanColor(plan.color || "#9b59b6");
+
+      document.getElementById("btnPlanSave").innerText = "수정 반영";
+      document.getElementById("btnPlanSaveClose").innerText = "수정 반영 및 닫기";
+      document.getElementById("btnPlanCancel").style.display = "block";
+    }
+
+    function resetPlanForm() {
+      editingPlanIndex = -1;
+      document.getElementById("planTitle").value = "";
+      document.getElementById("planStartTime").value = "09:00";
+      document.getElementById("planEndTime").value = "10:00";
+      document.getElementById("btnPlanSave").innerText = "계획 저장";
+      document.getElementById("btnPlanSaveClose").innerText = "계획 저장 및 닫기";
+      document.getElementById("btnPlanCancel").style.display = "none";
+    }
+
+    function renderPlans() {
+      const listEl = document.getElementById("planList");
+      listEl.innerHTML = "";
+      const plans = storageData[selectedDateStr]?.plans || [];
+
+      plans.forEach((pl, idx) => {
+        const item = document.createElement("div");
+        item.className = "list-item";
+        item.style.borderLeftColor = pl.color || "#9b59b6";
+
+        item.innerHTML = `
+          <div class="list-item-content">
+            <div class="list-item-title">${pl.title}</div>
+            <div class="list-item-sub">⏱ ${pl.startTime} ~ ${pl.endTime}</div>
+          </div>
+          <div class="item-actions">
+            <span class="edit-btn" onclick="startEditPlan(${idx})">수정</span>
+            <span class="delete-btn" onclick="deletePlan(${idx})">&times;</span>
+          </div>
+        `;
+        listEl.appendChild(item);
+      });
+
+      renderClockChart(plans);
+    }
+
+    function deletePlan(index) {
+      storageData[selectedDateStr].plans.splice(index, 1);
+      saveData();
+      if (editingPlanIndex === index) {
+        resetPlanForm();
+      }
+      renderPlans();
+    }
+
+    function renderClockChart(plans) {
+      const svg = document.getElementById("clockSvg");
+      svg.innerHTML = "";
+
+      const cx = 160, cy = 100, r = 70;
+
+      const bgCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      bgCircle.setAttribute("cx", cx);
+      bgCircle.setAttribute("cy", cy);
+      bgCircle.setAttribute("r", r);
+      bgCircle.setAttribute("fill", "#ffffff");
+      bgCircle.setAttribute("stroke", "#cbd5e1");
+      bgCircle.setAttribute("stroke-width", "2");
+      svg.appendChild(bgCircle);
+
+      function timeToAngle(timeStr) {
+        const [h, m] = timeStr.split(":").map(Number);
+        const totalMinutes = h * 60 + m;
+        return (totalMinutes / 1440) * 360 - 90;
+      }
+
+      function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
+        const angleInRadians = (angleInDegrees * Math.PI) / 180.0;
+        return {
+          x: centerX + radius * Math.cos(angleInRadians),
+          y: centerY + radius * Math.sin(angleInRadians)
+        };
+      }
+
+      function describeArc(x, y, radius, startAngle, endAngle) {
+        let diff = endAngle - startAngle;
+        if (diff < 0) diff += 360;
+        if (diff >= 360) diff = 359.999;
+
+        const start = polarToCartesian(x, y, radius, startAngle);
+        const end = polarToCartesian(x, y, radius, startAngle + diff);
+        const largeArcFlag = diff > 180 ? "1" : "0";
+
+        return [
+          "M", x, y,
+          "L", start.x, start.y,
+          "A", radius, radius, 0, largeArcFlag, 1, end.x, end.y,
+          "Z"
+        ].join(" ");
+      }
+
+      plans.forEach(pl => {
+        if (!pl.startTime || !pl.endTime) return;
+        const startAngle = timeToAngle(pl.startTime);
+        let endAngle = timeToAngle(pl.endTime);
+
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", describeArc(cx, cy, r, startAngle, endAngle));
+        path.setAttribute("fill", pl.color || "#9b59b6");
+        path.setAttribute("opacity", "0.75");
+        path.setAttribute("stroke", "#ffffff");
+        path.setAttribute("stroke-width", "1");
+
+        const titleTag = document.createElementNS("http://www.w3.org/2000/svg", "title");
+        titleTag.textContent = `${pl.title} (${pl.startTime} ~ ${pl.endTime})`;
+        path.appendChild(titleTag);
+
+        svg.appendChild(path);
+
+        let diffAngle = endAngle - startAngle;
+        if (diffAngle < 0) diffAngle += 360;
+        const midAngle = startAngle + (diffAngle / 2);
+
+        const startPos = polarToCartesian(cx, cy, r - 5, midAngle);
+        const midPos = polarToCartesian(cx, cy, r + 12, midAngle);
+
+        const isRight = Math.cos((midAngle * Math.PI) / 180) >= 0;
+        const lineEndPt = { x: midPos.x + (isRight ? 14 : -14), y: midPos.y };
+        const textPt = { x: midPos.x + (isRight ? 18 : -18), y: midPos.y + 3 };
+
+        const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+        polyline.setAttribute("points", `${startPos.x},${startPos.y} ${midPos.x},${midPos.y} ${lineEndPt.x},${lineEndPt.y}`);
+        polyline.setAttribute("fill", "none");
+        polyline.setAttribute("stroke", pl.color || "#475569");
+        polyline.setAttribute("stroke-width", "1.2");
+        polyline.setAttribute("stroke-linecap", "round");
+        svg.appendChild(polyline);
+
+        const labelText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        labelText.setAttribute("x", textPt.x);
+        labelText.setAttribute("y", textPt.y);
+        labelText.setAttribute("text-anchor", isRight ? "start" : "end");
+        labelText.setAttribute("font-size", "8.5");
+        labelText.setAttribute("font-weight", "600");
+        labelText.setAttribute("fill", "#334155");
+        labelText.textContent = pl.title.length > 7 ? pl.title.substring(0, 7) + ".." : pl.title;
+        svg.appendChild(labelText);
+      });
+
+      const hoursLabels = [
+        { hour: 0, label: "00" },
+        { hour: 3, label: "03" },
+        { hour: 6, label: "06" },
+        { hour: 9, label: "09" },
+        { hour: 12, label: "12" },
+        { hour: 15, label: "15" },
+        { hour: 18, label: "18" },
+        { hour: 21, label: "21" }
+      ];
+
+      for (let h = 0; h < 24; h++) {
+        const angle = (h / 24) * 360 - 90;
+        const p1 = polarToCartesian(cx, cy, r - 4, angle);
+        const p2 = polarToCartesian(cx, cy, r, angle);
+
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", p1.x);
+        line.setAttribute("y1", p1.y);
+        line.setAttribute("x2", p2.x);
+        line.setAttribute("y2", p2.y);
+        line.setAttribute("stroke", h % 3 === 0 ? "#475569" : "#cbd5e1");
+        line.setAttribute("stroke-width", h % 3 === 0 ? "1.5" : "1");
+        svg.appendChild(line);
+      }
+
+      hoursLabels.forEach(item => {
+        const angle = (item.hour / 24) * 360 - 90;
+        const pos = polarToCartesian(cx, cy, r - 12, angle);
+
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.setAttribute("x", pos.x);
+        text.setAttribute("y", pos.y + 3);
+        text.setAttribute("text-anchor", "middle");
+        text.setAttribute("font-size", "8");
+        text.setAttribute("font-weight", "bold");
+        text.setAttribute("fill", "#64748b");
+        text.textContent = item.label;
+        svg.appendChild(text);
+      });
+
+      const centerDot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      centerDot.setAttribute("cx", cx);
+      centerDot.setAttribute("cy", cy);
+      centerDot.setAttribute("r", "2.5");
+      centerDot.setAttribute("fill", "#475569");
+      svg.appendChild(centerDot);
+    }
+
+    function saveData() {
+      localStorage.setItem("calendarData", JSON.stringify(storageData));
+    }
+
+    renderCalendar();
+
+    // ===== PWA: 서비스워커 등록 =====
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => {
+          console.log('서비스워커 등록 실패:', err);
+        });
+      });
+    }
+
+    // ===== PWA: 설치 배너 (Android/Chrome용 beforeinstallprompt) =====
+    let deferredInstallPrompt = null;
+    const installBanner = document.getElementById('installBanner');
+    const installBtn = document.getElementById('installBtn');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      installBanner.classList.add('show');
+    });
+
+    installBtn.addEventListener('click', async () => {
+      installBanner.classList.remove('show');
+      if (!deferredInstallPrompt) return;
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+    });
+
+    window.addEventListener('appinstalled', () => {
+      installBanner.classList.remove('show');
+    });
+  </script>
+</body>
+</html>
