@@ -5,36 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>계획표 & 일정 달력 v1.09</title>
 
-  <!-- ===== PWA 설정 ===== -->
+  <!-- ===== PWA 관련 태그 (추가됨) ===== -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#3498db">
-  <meta name="background-color" content="#f5f7fb">
-
-  <!-- 아이콘 -->
-  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-  <link rel="apple-touch-icon" href="icon-192.png">
-
-  <!-- iOS 홈 화면 추가 대응 -->
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="계획표">
-
-  <!-- Android/Chrome 대응 -->
   <meta name="mobile-web-app-capable" content="yes">
-  <!-- ===================== -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="계획표">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <!-- ================================== -->
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', -apple-system, sans-serif; }
-    html, body { height: 100%; }
-    body {
-      padding: 20px;
-      padding-top: calc(20px + env(safe-area-inset-top, 0px));
-      padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
-      background: #f5f7fb;
-      color: #333;
-      position: relative;
-      min-height: 100vh;
-    }
+    body { padding: 20px; background: #f5f7fb; color: #333; position: relative; min-height: 100vh; }
     .calendar-container { max-width: 850px; margin: 0 auto; background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); position: relative; }
     
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: relative; }
@@ -243,43 +227,9 @@
       font-weight: 600;
       user-select: none;
     }
-
-    /* 설치 안내 배너 */
-    .install-banner {
-      display: none;
-      max-width: 850px;
-      margin: 0 auto 14px auto;
-      background: #eaf4fd;
-      border: 1px solid #bfe0fb;
-      color: #1f5f8b;
-      padding: 10px 14px;
-      border-radius: 10px;
-      font-size: 0.85rem;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-    }
-    .install-banner.show { display: flex; }
-    .install-banner button {
-      background: #3498db;
-      color: #fff;
-      border: none;
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-weight: bold;
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-    .install-banner button:hover { background: #2980b9; }
   </style>
 </head>
 <body>
-
-  <!-- 홈 화면 설치 유도 배너 (Android/Chrome) -->
-  <div class="install-banner" id="installBanner">
-    <span>📱 이 앱을 홈 화면에 추가하고 앱처럼 사용해보세요.</span>
-    <button id="installBtn">설치하기</button>
-  </div>
 
   <div class="calendar-container">
     <div class="header">
@@ -979,38 +929,17 @@
     }
 
     renderCalendar();
+  </script>
 
-    // ===== PWA: 서비스워커 등록 =====
+  <!-- ===== Service Worker 등록 (추가됨, PWA 오프라인 지원) ===== -->
+  <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').catch(err => {
-          console.log('서비스워커 등록 실패:', err);
-        });
+        navigator.serviceWorker.register('service-worker.js')
+          .catch(err => console.log('SW 등록 실패:', err));
       });
     }
-
-    // ===== PWA: 설치 배너 (Android/Chrome용 beforeinstallprompt) =====
-    let deferredInstallPrompt = null;
-    const installBanner = document.getElementById('installBanner');
-    const installBtn = document.getElementById('installBtn');
-
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredInstallPrompt = e;
-      installBanner.classList.add('show');
-    });
-
-    installBtn.addEventListener('click', async () => {
-      installBanner.classList.remove('show');
-      if (!deferredInstallPrompt) return;
-      deferredInstallPrompt.prompt();
-      await deferredInstallPrompt.userChoice;
-      deferredInstallPrompt = null;
-    });
-
-    window.addEventListener('appinstalled', () => {
-      installBanner.classList.remove('show');
-    });
   </script>
+  <!-- =========================================================== -->
 </body>
 </html>
