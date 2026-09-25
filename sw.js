@@ -1,56 +1,44 @@
-const CACHE_NAME = "calendar-app-cache-v1.09";
-const ASSETS_TO_CACHE = [
+// 계획표 & 일정 달력 - Service Worker
+// 캐시 이름을 바꾸면(v2, v3...) 이전 캐시가 자동으로 정리되고 새 파일로 교체됩니다.
+const CACHE_NAME = "calendar-app-cache-v2";
+const FILES_TO_CACHE = [
   "./",
   "./index.html",
   "./manifest.json",
-  "./icon-192.png",
-  "./icon-512.png",
-  "./icon-512-maskable.png"
+  "./icons/icon-192.png",
+  "./icons/icon-512.png",
+  "./icons/apple-touch-icon.png"
 ];
 
-// 설치: 핵심 파일을 캐시에 저장
+// 설치 시 필요한 파일들을 미리 캐시에 저장
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(FILES_TO_CACHE))
   );
   self.skipWaiting();
 });
 
-// 활성화: 이전 버전 캐시 정리
+// 활성화 시 이전 버전 캐시 삭제
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key))
+        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
       )
     )
   );
   self.clients.claim();
 });
 
-// 요청 처리: 캐시 우선, 없으면 네트워크로 요청 후 캐시에 저장
+// 요청이 오면: 네트워크를 먼저 시도하고, 실패하면(오프라인) 캐시에서 응답
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
-
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) return cachedResponse;
-
-      return fetch(event.request)
-        .then((networkResponse) => {
-          return caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, networkResponse.clone());
-            return networkResponse;
-          });
-        })
-        .catch(() => {
-          // 오프라인이고 캐시에도 없을 때 기본 페이지로 대체 (선택)
-          if (event.request.mode === "navigate") {
-            return caches.match("./index.html");
-          }
-        });
-    })
+    fetch(event.request)
+      .then((response) => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
