@@ -18,21 +18,30 @@
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; }
     html { scroll-padding-top: env(safe-area-inset-top, 0px); }
     body {
       padding: 20px;
       padding-top: max(20px, env(safe-area-inset-top, 0px));
       padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
-      background: #ffffff; color: #333; position: relative; min-height: 100%;
+      background: #ffffff; color: #333; position: relative;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
     }
-    .calendar-container { max-width: 850px; margin: 0 auto; background: #fff; padding: 25px; border-radius: 12px; position: relative; }
+    .calendar-container { width: 100%; max-width: 850px; background: #fff; padding: 25px; border-radius: 12px; position: relative; }
     
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: relative; }
     .header h2 { font-size: 1.5rem; color: #2c3e50; cursor: pointer; padding: 4px 12px; border-radius: 6px; transition: 0.2s; user-select: none; }
     .header h2:hover { background: #e2e8f0; color: #1a202c; }
-    .header button { padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s ease; }
-    .header button:hover { background: #2980b9; transform: translateY(-1px); }
-    .header button:active { transform: translateY(0) scale(0.97); }
+    .header button {
+      padding: 8px 12px; background: transparent; color: #475569; border: none;
+      border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.15s ease;
+    }
+    .header button:hover { background: rgba(148, 163, 184, 0.15); color: #1e293b; }
+    .header button:active { transform: scale(0.94); }
 
     /* 연/월 선택 드롭다운 팝업 */
     .ym-picker-popover {
@@ -84,7 +93,8 @@
     .ym-btn:hover { background: #edf2f7; border-color: #cbd5e1; }
     .ym-btn.selected { background: #3498db; color: #ffffff; border-color: #3498db; }
 
-    .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 14px 10px; text-align: center; }
+    .grid-viewport { overflow: hidden; }
+    .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 14px 10px; text-align: center; will-change: transform, opacity; }
     .day-header { font-weight: bold; padding: 10px 0; color: #7f8c8d; border-bottom: 1px solid #eef1f6; margin-bottom: 4px; }
     .day-header.sun { color: #e74c3c; }
     .day-header.sat { color: #2980b9; }
@@ -205,21 +215,29 @@
 
     /* 날짜 클릭 시 먼저 뜨는 미리보기 창 */
     .preview-panel {
-      display: none;
-      flex-direction: column;
-      margin-top: 16px;
-      padding: 16px 18px;
+      overflow: hidden;
+      max-height: 0;
+      opacity: 0;
+      margin-top: 0;
+      padding: 0 18px;
       border-radius: 14px;
       background: rgba(248, 250, 252, 0.65);
       backdrop-filter: blur(12px) saturate(1.3);
       -webkit-backdrop-filter: blur(12px) saturate(1.3);
-      border: 1px solid rgba(203, 213, 225, 0.5);
-      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-      animation: previewSlideDown 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      border: 1px solid transparent;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0);
+      display: flex;
+      flex-direction: column;
+      transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease,
+                  margin-top 0.35s ease, padding 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
     }
-    @keyframes previewSlideDown {
-      from { opacity: 0; transform: translateY(-8px); }
-      to { opacity: 1; transform: translateY(0); }
+    .preview-panel.open {
+      max-height: 480px;
+      opacity: 1;
+      margin-top: 16px;
+      padding: 16px 18px;
+      border-color: rgba(203, 213, 225, 0.5);
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
     }
     .preview-panel .modal-body { max-height: 260px; }
     .preview-section-title { font-size: 0.8rem; font-weight: bold; color: #64748b; margin: 14px 0 6px; }
@@ -363,7 +381,9 @@
       </div>
     </div>
 
-    <div class="grid" id="calendarGrid"></div>
+    <div class="grid-viewport">
+      <div class="grid" id="calendarGrid"></div>
+    </div>
 
     <!-- 미리보기 창 (날짜 클릭 시 달력 바로 아래에 반투명하게 펼쳐짐) -->
     <div class="preview-panel" id="previewModalOverlay">
@@ -712,10 +732,34 @@
       }
     }
 
+    let monthChangeAnimating = false;
+
     function changeMonth(delta) {
-      currentDate.setDate(1);
-      currentDate.setMonth(currentDate.getMonth() + delta);
-      renderCalendar();
+      if (monthChangeAnimating) return;
+      monthChangeAnimating = true;
+
+      const grid = document.getElementById("calendarGrid");
+      const outX = delta > 0 ? "-28px" : "28px";   // 다음 달이면 왼쪽으로 빠짐, 이전 달이면 오른쪽으로 빠짐
+      const inX = delta > 0 ? "28px" : "-28px";    // 새 달은 반대쪽에서 들어옴
+
+      grid.style.transition = "transform 0.16s ease, opacity 0.16s ease";
+      grid.style.transform = `translateX(${outX})`;
+      grid.style.opacity = "0";
+
+      setTimeout(() => {
+        currentDate.setDate(1);
+        currentDate.setMonth(currentDate.getMonth() + delta);
+        renderCalendar();
+
+        grid.style.transition = "none";
+        grid.style.transform = `translateX(${inX})`;
+        void grid.offsetWidth; // 강제 리플로우로 위치를 즉시 반영
+        grid.style.transition = "transform 0.18s ease, opacity 0.18s ease";
+        grid.style.transform = "translateX(0)";
+        grid.style.opacity = "1";
+
+        setTimeout(() => { monthChangeAnimating = false; }, 180);
+      }, 160);
     }
 
     function openModal(dateStr) {
@@ -727,7 +771,7 @@
 
       document.getElementById("previewModalTitle").innerText = `${dateStr}`;
       renderPreviewContent();
-      document.getElementById("previewModalOverlay").style.display = "flex";
+      document.getElementById("previewModalOverlay").classList.add("open");
     }
 
     function renderPreviewContent() {
@@ -760,12 +804,12 @@
     }
 
     function closePreviewModal() {
-      document.getElementById("previewModalOverlay").style.display = "none";
+      document.getElementById("previewModalOverlay").classList.remove("open");
       renderCalendar();
     }
 
     function openManageModal(mode) {
-      document.getElementById("previewModalOverlay").style.display = "none";
+      document.getElementById("previewModalOverlay").classList.remove("open");
       document.getElementById("modalTitle").innerText = `${selectedDateStr} 일정 / 계획`;
       document.getElementById("modalOverlay").style.display = "flex";
 
@@ -777,7 +821,7 @@
       document.getElementById("modalOverlay").style.display = "none";
       // 관리창을 닫으면 미리보기 창으로 돌아가서 방금 추가/수정한 내용을 바로 확인할 수 있게 함
       renderPreviewContent();
-      document.getElementById("previewModalOverlay").style.display = "flex";
+      document.getElementById("previewModalOverlay").classList.add("open");
       renderCalendar();
     }
 
@@ -1102,6 +1146,84 @@
     function saveData() {
       localStorage.setItem("calendarData", JSON.stringify(storageData));
     }
+
+    /* ===== 좌우 스와이프로 월 이동 (손가락 움직임에 실시간으로 맞춰 따라옴) ===== */
+    (function setupSwipe() {
+      const viewport = document.querySelector(".grid-viewport");
+      const grid = document.getElementById("calendarGrid");
+      let startX = 0, startY = 0, dragX = 0, dragging = false, axis = null;
+
+      viewport.addEventListener("touchstart", (e) => {
+        if (monthChangeAnimating) return;
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        dragX = 0;
+        dragging = true;
+        axis = null;
+        grid.style.transition = "none";
+      }, { passive: true });
+
+      viewport.addEventListener("touchmove", (e) => {
+        if (!dragging) return;
+        const dx = e.touches[0].clientX - startX;
+        const dy = e.touches[0].clientY - startY;
+
+        if (axis === null) {
+          if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+          axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+        }
+        if (axis !== "x") return; // 세로로 움직이면 페이지 스크롤을 그대로 둠
+
+        dragX = dx;
+        grid.style.transform = `translateX(${dragX}px)`;
+        grid.style.opacity = String(Math.max(1 - Math.abs(dragX) / 400, 0.6));
+      }, { passive: true });
+
+      viewport.addEventListener("touchend", () => {
+        if (!dragging) return;
+        dragging = false;
+        const wasX = axis;
+        axis = null;
+        if (wasX !== "x") return;
+
+        const THRESHOLD = 55;
+        if (dragX >= THRESHOLD) {
+          completeSwipe(1, dragX);   // 오른쪽으로 끌기 → 다음 달 (예: 9월 → 10월)
+        } else if (dragX <= -THRESHOLD) {
+          completeSwipe(-1, dragX);  // 왼쪽으로 끌기 → 이전 달 (예: 9월 → 8월)
+        } else {
+          grid.style.transition = "transform 0.18s ease, opacity 0.18s ease";
+          grid.style.transform = "translateX(0)";
+          grid.style.opacity = "1";
+        }
+      }, { passive: true });
+
+      function completeSwipe(delta, fromX) {
+        monthChangeAnimating = true;
+        const width = viewport.clientWidth || 320;
+        const outX = fromX >= 0 ? width : -width; // 끌던 방향으로 마저 빠져나감
+
+        grid.style.transition = "transform 0.15s ease, opacity 0.15s ease";
+        grid.style.transform = `translateX(${outX}px)`;
+        grid.style.opacity = "0";
+
+        setTimeout(() => {
+          currentDate.setDate(1);
+          currentDate.setMonth(currentDate.getMonth() + delta);
+          renderCalendar();
+
+          grid.style.transition = "none";
+          grid.style.transform = `translateX(${-outX}px)`; // 새 달은 반대쪽에서 들어옴
+          void grid.offsetWidth;
+          grid.style.transition = "transform 0.2s ease, opacity 0.2s ease";
+          grid.style.transform = "translateX(0)";
+          grid.style.opacity = "1";
+
+          setTimeout(() => { monthChangeAnimating = false; }, 200);
+        }, 150);
+      }
+    })();
+    /* ============================================ */
 
     renderCalendar();
   </script>
