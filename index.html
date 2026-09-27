@@ -93,8 +93,11 @@
     .ym-btn:hover { background: #edf2f7; border-color: #cbd5e1; }
     .ym-btn.selected { background: #3498db; color: #ffffff; border-color: #3498db; }
 
+    .day-header-row { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; }
     .grid-viewport { overflow: hidden; }
-    .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 14px 10px; text-align: center; will-change: transform, opacity; }
+    .grid-track { display: flex; }
+    .grid-track .grid { flex: 0 0 33.3333%; will-change: transform; }
+    .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 14px 10px; text-align: center; }
     .day-header { font-weight: bold; padding: 10px 0; color: #7f8c8d; border-bottom: 1px solid #eef1f6; margin-bottom: 4px; }
     .day-header.sun { color: #e74c3c; }
     .day-header.sat { color: #2980b9; }
@@ -381,8 +384,14 @@
       </div>
     </div>
 
+    <div class="day-header-row" id="weekdayHeader"></div>
+
     <div class="grid-viewport">
-      <div class="grid" id="calendarGrid"></div>
+      <div class="grid-track" id="gridTrack">
+        <div class="grid" id="gridPrev"></div>
+        <div class="grid" id="gridCurrent"></div>
+        <div class="grid" id="gridNext"></div>
+      </div>
     </div>
 
     <!-- 미리보기 창 (날짜 클릭 시 달력 바로 아래에 반투명하게 펼쳐짐) -->
@@ -643,15 +652,9 @@
       }
     }
 
-    function renderCalendar() {
-      const grid = document.getElementById("calendarGrid");
-      grid.innerHTML = "";
-
-      const year = currentDate.getFullYear();
-      const month = currentDate.getMonth();
-
-      document.getElementById("monthYear").innerText = `${year}년 ${month + 1}월`;
-
+    function renderWeekdayHeader() {
+      const headerRow = document.getElementById("weekdayHeader");
+      headerRow.innerHTML = "";
       const daysOfWeek = ["일", "월", "화", "수", "목", "금", "토"];
       daysOfWeek.forEach((day, index) => {
         const header = document.createElement("div");
@@ -659,8 +662,12 @@
         if (index === 0) header.classList.add("sun");
         if (index === 6) header.classList.add("sat");
         header.innerText = day;
-        grid.appendChild(header);
+        headerRow.appendChild(header);
       });
+    }
+
+    function buildMonthDays(year, month, container) {
+      container.innerHTML = "";
 
       const firstDay = new Date(year, month, 1).getDay();
       const lastDate = new Date(year, month + 1, 0).getDate();
@@ -669,7 +676,7 @@
       const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
       for (let i = 0; i < firstDay; i++) {
-        grid.appendChild(document.createElement("div"));
+        container.appendChild(document.createElement("div"));
       }
 
       for (let day = 1; day <= lastDate; day++) {
@@ -679,7 +686,7 @@
 
         const dayEl = document.createElement("div");
         let classNames = ["day"];
-        
+
         if (dateStr === todayStr) classNames.push("today");
         if (dayOfWeek === 0) classNames.push("sun");
         if (dayOfWeek === 6) classNames.push("sat");
@@ -728,38 +735,63 @@
           }
         }
 
-        grid.appendChild(dayEl);
+        container.appendChild(dayEl);
       }
+    }
+
+    function layoutTrack(instant) {
+      const viewport = document.querySelector(".grid-viewport");
+      const track = document.getElementById("gridTrack");
+      const w = viewport.clientWidth;
+      track.style.width = (w * 3) + "px";
+      if (instant) track.style.transition = "none";
+      track.style.transform = `translateX(${-w}px)`;
+      if (instant) void track.offsetWidth; // 강제 리플로우로 트랜지션 없이 즉시 위치 반영
+    }
+
+    function renderCalendar() {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+
+      document.getElementById("monthYear").innerText = `${year}년 ${month + 1}월`;
+
+      const prevRef = new Date(year, month - 1, 1);
+      const nextRef = new Date(year, month + 1, 1);
+
+      // 패널 순서(왼쪽→오른쪽): 이전 달 / 현재 달 / 다음 달 (표준 배치)
+      // → 왼쪽으로 끌면(오른쪽에서 왼쪽) 오른쪽 패널(다음 달)이 보이고, 오른쪽으로 끌면 왼쪽 패널(이전 달)이 보임
+      buildMonthDays(prevRef.getFullYear(), prevRef.getMonth(), document.getElementById("gridPrev"));
+      buildMonthDays(year, month, document.getElementById("gridCurrent"));
+      buildMonthDays(nextRef.getFullYear(), nextRef.getMonth(), document.getElementById("gridNext"));
+
+      layoutTrack(true);
     }
 
     let monthChangeAnimating = false;
 
-    function changeMonth(delta) {
+    function completeMonthChange(direction) {
+      // direction: 'next' → 오른쪽 패널(다음 달)이 화면을 채우도록, 'prev' → 왼쪽 패널(이전 달)이 화면을 채우도록
       if (monthChangeAnimating) return;
       monthChangeAnimating = true;
 
-      const grid = document.getElementById("calendarGrid");
-      const outX = delta > 0 ? "-28px" : "28px";   // 다음 달이면 왼쪽으로 빠짐, 이전 달이면 오른쪽으로 빠짐
-      const inX = delta > 0 ? "28px" : "-28px";    // 새 달은 반대쪽에서 들어옴
+      const viewport = document.querySelector(".grid-viewport");
+      const track = document.getElementById("gridTrack");
+      const w = viewport.clientWidth;
+      const target = direction === "next" ? -2 * w : 0;
 
-      grid.style.transition = "transform 0.16s ease, opacity 0.16s ease";
-      grid.style.transform = `translateX(${outX})`;
-      grid.style.opacity = "0";
+      track.style.transition = "transform 0.22s ease";
+      track.style.transform = `translateX(${target}px)`;
 
       setTimeout(() => {
         currentDate.setDate(1);
-        currentDate.setMonth(currentDate.getMonth() + delta);
-        renderCalendar();
+        currentDate.setMonth(currentDate.getMonth() + (direction === "next" ? 1 : -1));
+        renderCalendar(); // 3패널을 새로 채우고 트랙을 트랜지션 없이 가운데로 되돌림 (시각적으로 이어짐)
+        monthChangeAnimating = false;
+      }, 220);
+    }
 
-        grid.style.transition = "none";
-        grid.style.transform = `translateX(${inX})`;
-        void grid.offsetWidth; // 강제 리플로우로 위치를 즉시 반영
-        grid.style.transition = "transform 0.18s ease, opacity 0.18s ease";
-        grid.style.transform = "translateX(0)";
-        grid.style.opacity = "1";
-
-        setTimeout(() => { monthChangeAnimating = false; }, 180);
-      }, 160);
+    function changeMonth(delta) {
+      completeMonthChange(delta > 0 ? "next" : "prev");
     }
 
     function openModal(dateStr) {
@@ -1147,11 +1179,11 @@
       localStorage.setItem("calendarData", JSON.stringify(storageData));
     }
 
-    /* ===== 좌우 스와이프로 월 이동 (손가락 움직임에 실시간으로 맞춰 따라옴) ===== */
+    /* ===== 좌우 스와이프로 월 이동 (드래그하는 동안 옆 달이 실시간으로 함께 보임) ===== */
     (function setupSwipe() {
       const viewport = document.querySelector(".grid-viewport");
-      const grid = document.getElementById("calendarGrid");
-      let startX = 0, startY = 0, dragX = 0, dragging = false, axis = null;
+      const track = document.getElementById("gridTrack");
+      let startX = 0, startY = 0, dragX = 0, dragging = false, axis = null, baseX = 0;
 
       viewport.addEventListener("touchstart", (e) => {
         if (monthChangeAnimating) return;
@@ -1160,7 +1192,8 @@
         dragX = 0;
         dragging = true;
         axis = null;
-        grid.style.transition = "none";
+        baseX = -viewport.clientWidth; // 가운데(현재 달) 기준 위치
+        track.style.transition = "none";
       }, { passive: true });
 
       viewport.addEventListener("touchmove", (e) => {
@@ -1175,8 +1208,7 @@
         if (axis !== "x") return; // 세로로 움직이면 페이지 스크롤을 그대로 둠
 
         dragX = dx;
-        grid.style.transform = `translateX(${dragX}px)`;
-        grid.style.opacity = String(Math.max(1 - Math.abs(dragX) / 400, 0.6));
+        track.style.transform = `translateX(${baseX + dragX}px)`;
       }, { passive: true });
 
       viewport.addEventListener("touchend", () => {
@@ -1187,44 +1219,23 @@
         if (wasX !== "x") return;
 
         const THRESHOLD = 55;
-        if (dragX >= THRESHOLD) {
-          completeSwipe(1, dragX);   // 오른쪽으로 끌기 → 다음 달 (예: 9월 → 10월)
-        } else if (dragX <= -THRESHOLD) {
-          completeSwipe(-1, dragX);  // 왼쪽으로 끌기 → 이전 달 (예: 9월 → 8월)
+        if (dragX <= -THRESHOLD) {
+          completeMonthChange("next");  // 왼쪽으로 끌기(오른쪽→왼쪽) → 다음 달 (예: 9월 → 10월)
+        } else if (dragX >= THRESHOLD) {
+          completeMonthChange("prev");  // 오른쪽으로 끌기 → 이전 달 (예: 9월 → 8월)
         } else {
-          grid.style.transition = "transform 0.18s ease, opacity 0.18s ease";
-          grid.style.transform = "translateX(0)";
-          grid.style.opacity = "1";
+          track.style.transition = "transform 0.2s ease";
+          track.style.transform = `translateX(${baseX}px)`;
         }
       }, { passive: true });
 
-      function completeSwipe(delta, fromX) {
-        monthChangeAnimating = true;
-        const width = viewport.clientWidth || 320;
-        const outX = fromX >= 0 ? width : -width; // 끌던 방향으로 마저 빠져나감
-
-        grid.style.transition = "transform 0.15s ease, opacity 0.15s ease";
-        grid.style.transform = `translateX(${outX}px)`;
-        grid.style.opacity = "0";
-
-        setTimeout(() => {
-          currentDate.setDate(1);
-          currentDate.setMonth(currentDate.getMonth() + delta);
-          renderCalendar();
-
-          grid.style.transition = "none";
-          grid.style.transform = `translateX(${-outX}px)`; // 새 달은 반대쪽에서 들어옴
-          void grid.offsetWidth;
-          grid.style.transition = "transform 0.2s ease, opacity 0.2s ease";
-          grid.style.transform = "translateX(0)";
-          grid.style.opacity = "1";
-
-          setTimeout(() => { monthChangeAnimating = false; }, 200);
-        }, 150);
-      }
+      window.addEventListener("resize", () => {
+        if (!dragging) layoutTrack(true);
+      });
     })();
     /* ============================================ */
 
+    renderWeekdayHeader();
     renderCalendar();
   </script>
 

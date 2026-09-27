@@ -1,6 +1,6 @@
 // 계획표 & 일정 달력 - Service Worker
 // 캐시 이름을 바꾸면(v2, v3...) 이전 캐시가 자동으로 정리되고 새 파일로 교체됩니다.
-const CACHE_NAME = "calendar-app-cache-v8";
+const CACHE_NAME = "calendar-app-cache-v13";
 const FILES_TO_CACHE = [
   "./",
   "./index.html",
