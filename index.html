@@ -18,20 +18,26 @@
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
-    html, body { height: 100%; }
+    html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
     html { scroll-padding-top: env(safe-area-inset-top, 0px); }
     body {
       padding: 20px;
       padding-top: max(20px, env(safe-area-inset-top, 0px));
       padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
       background: #ffffff; color: #333; position: relative;
-      min-height: 100dvh;
+      height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
     }
-    .calendar-container { width: 100%; max-width: 850px; background: #fff; padding: 25px; border-radius: 12px; position: relative; }
+    .calendar-container {
+      width: 100%; max-width: 850px; background: #fff; padding: 25px; border-radius: 12px; position: relative;
+      max-height: 100%;
+      overflow-y: auto;
+      overscroll-behavior-y: contain;
+      -webkit-overflow-scrolling: touch;
+    }
     
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: relative; }
     .header h2 { font-size: 1.5rem; color: #2c3e50; cursor: pointer; padding: 4px 12px; border-radius: 6px; transition: 0.2s; user-select: none; }
